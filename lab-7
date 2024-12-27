@@ -1,0 +1,25 @@
+// https://leetcode.com/problems/earliest-possible-day-of-full-bloom/description/?envType=problem-list-v2&envId=greedy
+
+class Solution {
+public:
+    int earliestFullBloom(vector<int>& plantTime, vector<int>& growTime) {
+        int n = plantTime.size();
+        
+        std::vector<int> ind(n); // Вектор для индексов значений
+        std::iota(ind.begin(), ind.end(), 0); 
+
+        // Сортируем индексы
+        std::sort(ind.begin(), ind.end(), [&](int i, int j) { 
+            return growTime[j] < growTime[i]; // Сортировка по убыванию времени роста
+            }); 
+
+        int sd = 0;
+        int t = 0;
+        // Проходим по отсортированным индексам и вычисляем время цветения для каждого растения
+        for (int i : ind) {
+            t += plantTime[i]; // Увеличиваем время на время посадки текущего растения
+            sd = max (sd, t + growTime[i]); // Обновляем максимальное время цветения
+        }
+        return sd;
+    }
+};
