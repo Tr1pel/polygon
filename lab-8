@@ -1,0 +1,293 @@
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <stack>
+#include <unordered_map>
+#include <limits>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <chrono>
+
+struct Node {
+    double lon, lat; // Координаты
+    std::vector<std::pair<Node*, double>> neighbors; // Соседи узла
+};
+
+struct Graph {
+    std::vector<Node*> nodes; // Узлы графа
+
+    // Поиск ближайшего узла по координатам
+    Node* find_closest_node(double lat, double lon) {
+        double min_dist = 1e50;
+        Node* node_found = nullptr;
+
+        for (auto node : nodes) {
+            double dist = std::sqrt(std::pow(node->lat - lat, 2) + std::pow(node->lon - lon, 2));
+            if (dist < min_dist) {
+                node_found = node;
+                min_dist = dist;
+            }
+        }
+
+        return node_found;
+    }
+};
+
+// Парсинг графа
+Graph load_graph(const std::string& filename) {
+    Graph graph;
+    std::unordered_map<std::string, Node*> node_map;
+    std::ifstream file(filename);
+
+    std::string line;
+    while (std::getline(file, line)) { 
+        std::istringstream ss(line);                                            
+        std::string parent_part, children_part;
+        
+        // Разделяем строку на родительскую часть и дочернюю часть
+        std::getline(ss, parent_part, ':');
+        std::getline(ss, children_part);
+
+        // Парсим координаты родительского узла
+        double lon1, lat1;
+        char comma; // Разделитель
+        std::istringstream parent_stream(parent_part);
+        parent_stream >> lon1 >> comma >> lat1;
+
+        // Создаём или получаем родительский узел
+        std::string parent_key = std::to_string(lon1) + "," + std::to_string(lat1);
+        if (node_map.find(parent_key) == node_map.end()) {
+            node_map[parent_key] = new Node{lon1, lat1, {}};
+            graph.nodes.push_back(node_map[parent_key]);
+        }
+        Node* parent_node = node_map[parent_key];
+
+        // Парсим дочерние узлы
+        std::istringstream children_stream(children_part);
+        std::string child_part;
+        while (std::getline(children_stream, child_part, ';')) {
+            std::istringstream child_stream(child_part);
+
+            double lon2, lat2, weight;
+            child_stream >> lon2 >> comma >> lat2 >> comma >> weight;
+
+            // Создаём или получаем дочерний узел
+            std::string child_key = std::to_string(lon2) + "," + std::to_string(lat2);
+            if (node_map.find(child_key) == node_map.end()) {
+                node_map[child_key] = new Node{lon2, lat2, {}};
+                graph.nodes.push_back(node_map[child_key]);
+            }
+            Node* child_node = node_map[child_key];
+
+            // Добавляем ребро
+            parent_node->neighbors.push_back({child_node, weight});
+        }
+    }
+
+    file.close();
+    return graph;
+};
+
+// Алгоритм BFS
+std::vector<Node*> bfs(Graph& graph, Node* start, Node* target) {
+    std::unordered_map<Node*, double> distances;
+    std::unordered_map<Node*, Node*> came_from;
+    
+    // Очередь с приоритетом для выбора узлов с минимальным текущим весом
+    auto compare = [&distances](Node* a, Node* b) { return distances[a] > distances[b]; };
+    std::priority_queue<Node*, std::vector<Node*>, decltype(compare)> queue(compare);
+
+    // Инициализация расстояний
+    for (auto node : graph.nodes) {
+        distances[node] = std::numeric_limits<double>::infinity();
+    }
+    distances[start] = 0.0;
+    queue.push(start);
+
+    while (!queue.empty()) {
+        Node* current = queue.top();
+        queue.pop();
+
+        // Если достигли цели, восстанавливаем путь
+        if (current == target) {
+            std::vector<Node*> path;
+            for (Node* at = target; at != nullptr; at = came_from[at]) {
+                path.push_back(at);
+            }
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+
+        // Обрабатываем соседей текущего узла
+        for (const auto& [neighbor, weight] : current->neighbors) {
+            double new_dist = distances[current] + weight;
+            if (new_dist < distances[neighbor]) {
+                distances[neighbor] = new_dist;
+                came_from[neighbor] = current;
+                queue.push(neighbor);
+            }
+        }
+    }
+
+    // Если путь не найден, возвращаем пустой результат
+    return {};
+}
+
+// DFS 
+std::vector<Node*> dfs(Graph& graph, Node* start, Node* target) {
+    std::unordered_map<Node*, double> distances;
+    std::unordered_map<Node*, Node*> came_from;
+
+    // Приоритетный стек для выбора узлов с минимальным текущим весом
+    auto compare = [&distances](Node* a, Node* b) { return distances[a] > distances[b]; };
+    std::priority_queue<Node*, std::vector<Node*>, decltype(compare)> stack(compare);
+
+    // Инициализация расстояний
+    for (auto node : graph.nodes) {
+        distances[node] = std::numeric_limits<double>::infinity();
+    }
+    distances[start] = 0.0;
+    stack.push(start);
+
+    while (!stack.empty()) {
+        Node* current = stack.top();
+        stack.pop();
+
+        // Если достигли цели, восстанавливаем путь
+        if (current == target) {
+            std::vector<Node*> path;
+            for (Node* at = target; at != nullptr; at = came_from[at]) {
+                path.push_back(at);
+            }
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+
+        // Обрабатываем соседей текущего узла
+        for (const auto& [neighbor, weight] : current->neighbors) {
+            double new_dist = distances[current] + weight;
+            if (new_dist < distances[neighbor]) {
+                distances[neighbor] = new_dist;
+                came_from[neighbor] = current;
+                stack.push(neighbor);
+            }
+        }
+    }
+
+    // Если путь не найден, возвращаем пустой результат
+    return {};
+}
+
+// Алгоритм Дейкстры
+std::vector<Node*> dijkstra(Graph& graph, Node* start, Node* target) {
+    std::unordered_map<Node*, double> distances;
+    std::unordered_map<Node*, Node*> came_from;
+
+    // Приоритетная очередь для выбора узлов с минимальным текущим весом
+    auto compare = [&distances](Node* a, Node* b) { return distances[a] > distances[b]; };
+    std::priority_queue<Node*, std::vector<Node*>, decltype(compare)> pq(compare);
+
+    // Инициализация расстояний
+    for (auto node : graph.nodes) {
+        distances[node] = std::numeric_limits<double>::infinity();
+    }
+    distances[start] = 0.0;
+    pq.push(start);
+
+    while (!pq.empty()) {
+        Node* current = pq.top();
+        pq.pop();
+
+        // Если достигли цели, восстанавливаем путь
+        if (current == target) {
+            std::vector<Node*> path;
+            for (Node* at = target; at != nullptr; at = came_from[at]) {
+                path.push_back(at);
+            }
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+
+        // Обрабатываем соседей текущего узла
+        for (const auto& [neighbor, weight] : current->neighbors) {
+            double new_dist = distances[current] + weight;
+            if (new_dist < distances[neighbor]) {
+                distances[neighbor] = new_dist;
+                came_from[neighbor] = current;
+                pq.push(neighbor);
+            }
+        }
+    }
+
+    // Если путь не найден, возвращаем пустой результат
+    return {};
+}
+
+// Вывод пути
+void print_path(const std::vector<Node*>& path) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    if (path.empty()) {
+        std::cout << "Путь не найден\n";
+        return;
+    }
+
+    std::cout << "Путь:\n";
+    int path_count = 0;
+    for (auto node : path) {
+        std::cout << std::fixed << std::setprecision(8); // Устанавливаем точность до 8 знаков
+        std::cout << "(" << node->lat << ", " << node->lon << ") -> ";
+        path_count++;
+    }
+    std::cout << "Конец\n";
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::cout << "Время работы: " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms\n";
+    std::cout << "Количество путей:" << path_count << "\n";
+}
+
+int main() {
+    try {
+        // Загружаем граф из файла
+        Graph graph = load_graph("spb_graph.txt");
+
+        // Указываем координаты начальной и конечной точек
+        
+        double start_lat = 60.050257, start_lon = 30.436555;
+        double target_lat = 59.956665, target_lon = 30.308456;
+
+        // Находим ближайшие узлы к этим координатам
+        Node* start = graph.find_closest_node(start_lat, start_lon);
+        Node* target = graph.find_closest_node(target_lat, target_lon);
+
+        if (!start || !target) {
+            std::cerr << "Не удалось найти начальный или конечный узел\n";
+            return 1;
+        }
+
+        // Запускаем BFS
+        std::vector<Node*> path_bfs = bfs(graph, start, target);
+        std::cout << "Результат BFS:\n";
+        print_path(path_bfs);
+
+        // Запускаем DFS
+        std::vector<Node*> path_dfs = dfs(graph, start, target);
+        std::cout << "Результат DFS:\n";
+        print_path(path_dfs);
+
+        // Запускаем Дейкстру
+        std::vector<Node*> path_dijkstra = dijkstra(graph, start, target);
+        std::cout << "Результат Дейкстры:\n";
+        print_path(path_dijkstra);
+
+    } catch (const std::exception& ex) {
+        std::cerr << "Ошибка: " << ex.what() << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
