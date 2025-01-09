@@ -1,0 +1,7 @@
+import numpy as np
+
+arr1 = np.array([int(i) for i in input().split()])
+arr2 = np.array([int(i) for i in input().split()])
+
+result = np.intersect1d(arr1, arr2)
+print(result)
