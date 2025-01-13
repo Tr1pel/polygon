@@ -227,6 +227,62 @@ std::vector<Node*> dijkstra(Graph& graph, Node* start, Node* target) {
     return {};
 }
 
+// Алгоритм A*
+std::vector<Node*> astar(Graph& graph, Node* start, Node* target) {
+    auto heuristic = [](Node* a, Node* b) {
+        // Эвристика: евклидово расстояние между узлами
+        return std::sqrt(std::pow(a->lat - b->lat, 2) + std::pow(a->lon - b->lon, 2));
+    };
+
+    std::unordered_map<Node*, double> g_score; // хранит вес кратчайшего пути от начального узла до текущего
+    std::unordered_map<Node*, double> f_score; // Используется для оценки стоимости пути через узел (g_score + эвристика)
+    std::unordered_map<Node*, Node*> came_from;
+
+    // Инициализация расстояний для всех узлов 
+    for (auto node : graph.nodes) {
+        g_score[node] = std::numeric_limits<double>::infinity();
+        f_score[node] = std::numeric_limits<double>::infinity();
+    }
+
+    g_score[start] = 0.0;
+    f_score[start] = heuristic(start, target);
+
+    auto compare = [&f_score](Node* a, Node* b) { return f_score[a] > f_score[b]; };
+
+    // Очередь с приоритетом используется для обработки узлов с наименьшим f_score.
+    std::priority_queue<Node*, std::vector<Node*>, decltype(compare)> open_set(compare);
+    open_set.push(start);
+
+    while (!open_set.empty()) {
+        Node* current = open_set.top();
+        open_set.pop();
+
+        if (current == target) {
+            std::vector<Node*> path;
+            for (Node* at = target; at != nullptr; at = came_from[at]) {
+                path.push_back(at);
+            }
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+
+        for (const auto& [neighbor, weight] : current->neighbors) {
+            double tentative_g_score = g_score[current] + weight; // Вычисляет потенциальную стоимость пути через текущий узел
+
+            // Проверяка, является ли найденный путь к соседнему узлу оптимальным
+            if (tentative_g_score < g_score[neighbor]) {
+                came_from[neighbor] = current;
+                g_score[neighbor] = tentative_g_score;
+                f_score[neighbor] = g_score[neighbor] + heuristic(neighbor, target);
+                // Добавляем соседний узел в очередь для дальнейшей обработки, если он имеет более низкую стоимость пути
+                open_set.push(neighbor);
+            }
+        }
+    }
+
+    return {}; // Если путь не найден
+}
+
 // Вывод пути
 void print_path(const std::vector<Node*>& path) {
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -283,6 +339,11 @@ int main() {
         std::vector<Node*> path_dijkstra = dijkstra(graph, start, target);
         std::cout << "Результат Дейкстры:\n";
         print_path(path_dijkstra);
+
+        // Запускаем A*
+        std::vector<Node*> path_astar = astar(graph, start, target);
+        std::cout << "Результат A*:\n";
+        print_path(path_astar);
 
     } catch (const std::exception& ex) {
         std::cerr << "Ошибка: " << ex.what() << std::endl;
